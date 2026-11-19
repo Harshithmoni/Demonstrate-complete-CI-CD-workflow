@@ -1,0 +1,97 @@
+---
+- name: Update base system packages (safe subset)
+  dnf:
+    name:
+      - curl
+      - wget
+      - git
+      - python3
+      - python3-pip
+      - dnf-plugins-core
+    state: latest
+
+- name: Add Docker CE repository
+  shell: |
+    dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+  args:
+    creates: /etc/yum.repos.d/docker-ce.repo
+
+- name: Install Docker CE packages
+  dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+
+- name: Ensure /etc/docker directory exists
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+
+- name: Configure Docker with insecure registry
+  copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "insecure-registries": ["{{ registry_host }}:5000"]
+      }
+    mode: '0644'
+
+- name: Enable and start Docker service
+  systemd:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Wait for Docker socket to be available
+  wait_for:
+    path: /var/run/docker.sock
+    state: present
+    timeout: 30
+
+- name: Add ec2-user to docker group
+  user:
+    name: ec2-user
+    groups: docker
+    append: yes
+
+- name: Reboot the server
+  reboot:
+    msg: "Reboot to apply docker group membership"
+    reboot_timeout: 300
+    test_command: whoami  # ensures machine is back online
+
+- name: Wait for system to come back
+  wait_for_connection:
+    timeout: 300
+
+- name: Install kubectl (latest stable)
+  shell: |
+    VERSION=$(curl -sL https://dl.k8s.io/release/stable.txt)
+    curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+  args:
+    executable: /bin/bash
+
+
+- name: Install Minikube
+  shell: |
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    install -m 0755 minikube-linux-amd64 /usr/local/bin/minikube
+
+- name: Start Minikube using Docker driver
+  become_user: ec2-user
+  shell: |
+    minikube start --insecure-registry="{{ registry_host }}:5000" --driver=docker
+  environment:
+    CHANGE_MINIKUBE_NONE_USER: "true"
+    PATH: "/usr/local/bin:/usr/bin:/bin"
+
+- name: Copy kubeconfig to root user
+  shell: |
+    mkdir -p /root/.kube
+    cp /home/ec2-user/.kube/config /root/.kube/config
+  when: ansible_user_id == "ec2-user"
+
