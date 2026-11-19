@@ -1,4 +1,4 @@
-# 🚀 Full DevOps CI/CD Workflow (Jenkins + Ansible + Docker + Kubernetes on RHEL 9 EC2)
+# Full DevOps CI/CD Workflow (Jenkins + Ansible + Docker + Kubernetes on RHEL 9 EC2)
 
 This project demonstrates a complete, production-style DevOps workflow manually configured from scratch — using only open-source tools and without prebuilt container images. It implements a GitOps-style CI/CD pipeline where a code push triggers a Jenkins pipeline, builds a Docker image, deploys it with Ansible, and runs the app on Kubernetes (Minikube) hosted on a remote EC2 node.
 
